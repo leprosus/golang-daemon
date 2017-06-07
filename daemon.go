@@ -5,7 +5,6 @@ import (
 	"os"
 	"os/exec"
 	"syscall"
-	"fmt"
 )
 
 type Daemon struct {
@@ -25,26 +24,11 @@ func (daemon *Daemon) StartWithCLI(mainLoop func()) (err error) {
 			mainLoop()
 		case "start":
 			err = daemon.Start(mainLoop)
-			if daemon.IsDaemonised() {
-				fmt.Println("Daemon is started")
-			} else {
-				fmt.Fprintln(os.Stderr, "Daemon is still stopped")
-			}
 		case "restart":
-			err = daemon.Stop()
+			daemon.Stop()
 			err = daemon.Start(mainLoop)
-			if daemon.IsDaemonised() {
-				println("Daemon is restarted")
-			} else {
-				fmt.Fprintln(os.Stderr, "Daemon is stopped. Can't run it")
-			}
 		case "stop":
 			err = daemon.Stop()
-			if daemon.IsDaemonised() {
-				fmt.Fprintln(os.Stderr, "Daemon is still started")
-			} else {
-				fmt.Println("Daemon is stopped")
-			}
 		case "status":
 			if daemon.IsDaemonised() {
 				println("run")
