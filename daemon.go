@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"syscall"
+	"fmt"
 )
 
 type Daemon struct {
@@ -20,10 +21,30 @@ func (daemon *Daemon) StartWithCLI(mainLoop func()) (err error) {
 		daemon.withCli = true
 
 		switch os.Args[1] {
+		case "run":
+			mainLoop()
 		case "start":
 			err = daemon.Start(mainLoop)
+			if daemon.IsDaemonised() {
+				fmt.Println("Daemon is started")
+			} else {
+				fmt.Fprintln(os.Stderr, "Daemon is still stopped")
+			}
+		case "restart":
+			err = daemon.Stop()
+			err = daemon.Start(mainLoop)
+			if daemon.IsDaemonised() {
+				println("Daemon is restarted")
+			} else {
+				fmt.Fprintln(os.Stderr, "Daemon is stopped. Can't run it")
+			}
 		case "stop":
 			err = daemon.Stop()
+			if daemon.IsDaemonised() {
+				fmt.Fprintln(os.Stderr, "Daemon is still started")
+			} else {
+				fmt.Println("Daemon is stopped")
+			}
 		case "status":
 			if daemon.IsDaemonised() {
 				println("run")
@@ -32,8 +53,10 @@ func (daemon *Daemon) StartWithCLI(mainLoop func()) (err error) {
 			}
 		default:
 			help := "Usage:\n" +
-				"\tstart\tto start daemon\n" +
+				"\trun\tto run script in foreground mode\n" +
+				"\tstart\tto start as daemon\n" +
 				"\tstop\tto stop daemon\n" +
+				"\trestart\tto restart of the daemon\n" +
 				"\tstatus\treturns daemon status\n" +
 				"\thelp\tto print this help\n"
 
