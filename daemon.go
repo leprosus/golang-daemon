@@ -86,10 +86,7 @@ func (daemon Daemon) Start(mainLoop func()) (err error) {
 func (daemon Daemon) Stop() (err error) {
 	var path string
 	if path, err = filepath.Abs(os.Args[0]); err == nil {
-		cmd := exec.Command("pkill", "-f", path)
-		if err = cmd.Wait(); err != nil {
-			return
-		}
+		exec.Command("pkill", "-f", path).Output()
 	}
 
 	return
