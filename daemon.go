@@ -6,11 +6,19 @@ import (
 	"os/exec"
 	"syscall"
 	"strings"
+	"time"
 )
+
+type Script struct {
+	abs  string
+	name string
+}
 
 type Daemon struct {
 	withCli    bool
 	allowUsers []string
+	script     Script
+	mainLoop   func()
 }
 
 const (
@@ -25,84 +33,123 @@ const (
 	havntAccess = "You havn't access to execute"
 )
 
-func New() Daemon {
-	return Daemon{}
+func New(mainLoop func()) Daemon {
+	return Daemon{
+		mainLoop: mainLoop,
+		script:   Script{}}
 }
 
 func (daemon *Daemon) AllowUser(userName string) {
 	daemon.allowUsers = append(daemon.allowUsers, userName)
 }
 
-func (daemon *Daemon) StartWithCLI(mainLoop func()) (err error) {
+func (daemon *Daemon) StartWithCLI() (err error) {
+	if !daemon.IsAllowExec() {
+		println(havntAccess)
+
+		return
+	}
+
 	if len(os.Args) > 1 {
+		err = daemon.splitScriptName()
+		if err != nil {
+			return
+		}
+
+		if os.Args[1] == "status" {
+			if daemon.IsDaemonised() {
+				println(daemon.script.name, "is running")
+			} else {
+				println(daemon.script.name, "is stopped")
+			}
+
+			return
+		}
+
 		daemon.withCli = true
 
 		switch os.Args[1] {
 		case "run":
-			if daemon.IsAllowExec() {
-				mainLoop()
-			} else {
-				println(havntAccess)
-			}
+			daemon.mainLoop()
 		case "start":
-			if daemon.IsAllowExec() {
-				err = daemon.Start(mainLoop)
-			} else {
-				println(havntAccess)
+			err = daemon.doStart()
+			if err == nil {
+				println(daemon.script.name, "is running")
 			}
 		case "restart":
-			if daemon.IsAllowExec() {
-				daemon.Stop()
-				err = daemon.Start(mainLoop)
-			} else {
-				println(havntAccess)
+			err = daemon.doStop()
+			if err == nil {
+				println(daemon.script.name, "is stopped")
+			}
+
+			time.Sleep(5 * time.Second)
+
+			err = daemon.doStart()
+			if err == nil {
+				println(daemon.script.name, "is running")
 			}
 		case "stop":
-			if daemon.IsAllowExec() {
-				err = daemon.Stop()
-			} else {
-				println(havntAccess)
-			}
-		case "status":
-			if daemon.IsDaemonised() {
-				println("run")
-			} else {
-				println("stop")
+			err = daemon.doStop()
+			if err == nil {
+				println(daemon.script.name, "is stopped")
 			}
 		default:
 			println(help)
 		}
 	} else {
-		mainLoop()
+		daemon.mainLoop()
 	}
 
 	return
 }
 
-func (daemon Daemon) Start(mainLoop func()) (err error) {
+func (daemon *Daemon) splitScriptName() (err error) {
+	daemon.script.abs, err = filepath.Abs(os.Args[0])
+	if err != nil {
+		return
+	}
+
+	info, err := os.Stat(daemon.script.abs)
+	if err != nil {
+		return
+	}
+
+	daemon.script.name = info.Name()
+
+	return
+}
+
+func (daemon Daemon) doStart() (err error) {
 	if !daemon.IsDaemonised() {
-		progName := os.Args[0]
+		err = daemon.Start()
+	}
 
-		var path string
-		if path, err = filepath.Abs(progName); err != nil {
-			return
-		}
+	return
+}
 
+func (daemon Daemon) doStop() (err error) {
+	if daemon.IsDaemonised() {
+		err = daemon.Stop()
+	}
+
+	return
+}
+
+func (daemon Daemon) Start() (err error) {
+	if !daemon.IsDaemonised() {
 		progArgs := os.Args[1:]
 		if daemon.withCli &&
 			progArgs[0] == "start" {
 			progArgs = os.Args[2:]
 		}
 
-		cmd := exec.Command(path, progArgs...)
+		cmd := exec.Command(daemon.script.abs, progArgs...)
 		if err = cmd.Start(); err != nil {
 			return
 		}
 
-		os.Exit(0)
+		return
 	}
-
-	mainLoop()
 
 	_, err = syscall.Setsid()
 
@@ -110,22 +157,16 @@ func (daemon Daemon) Start(mainLoop func()) (err error) {
 }
 
 func (daemon Daemon) Stop() (err error) {
-	var path string
-	if path, err = filepath.Abs(os.Args[0]); err == nil {
-		exec.Command("pkill", "-f", path).Output()
-	}
+	exec.Command("pkill", "-f", daemon.script.abs).Output()
 
 	return
 }
 
 func (daemon Daemon) IsDaemonised() bool {
-	if path, err := filepath.Abs(os.Args[0]); err == nil {
-		var out []byte
-		out, _ = exec.Command("pgrep", "-f", path).Output()
-		return len(out) > 0
-	}
+	var out []byte
+	out, _ = exec.Command("pgrep", "-f", daemon.script.abs).Output()
 
-	return false
+	return len(out) > 0
 }
 
 func (daemon Daemon) IsAllowExec() bool {
