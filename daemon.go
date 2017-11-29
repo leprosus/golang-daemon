@@ -82,7 +82,9 @@ func (daemon *Daemon) StartWithCLI() (err error) {
 				println(daemon.script.name, "is stopped")
 			}
 
-			time.Sleep(5 * time.Second)
+			for daemon.IsDaemonised() {
+				time.Sleep(time.Second)
+			}
 
 			err = daemon.doStart()
 			if err == nil {
@@ -139,7 +141,7 @@ func (daemon Daemon) Start() (err error) {
 	if !daemon.IsDaemonised() {
 		progArgs := os.Args[1:]
 		if daemon.withCli &&
-			progArgs[0] == "start" {
+			(progArgs[0] == "start" || progArgs[0] == "restart") {
 			progArgs = os.Args[2:]
 		}
 
