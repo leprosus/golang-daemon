@@ -173,6 +173,10 @@ func (daemon Daemon) Start() (err error) {
 func (daemon Daemon) Stop() (err error) {
 	exec.Command("pkill", "-f", daemon.script.abs).Output()
 
+	if len(daemon.pidPath) > 0 {
+		ioutil.WriteFile(daemon.pidPath, []byte{}, 0770)
+	}
+
 	return
 }
 
