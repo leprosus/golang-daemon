@@ -7,6 +7,7 @@ import (
 	"syscall"
 	"strings"
 	"time"
+	"io/ioutil"
 )
 
 type Script struct {
@@ -19,6 +20,7 @@ type Daemon struct {
 	allowUsers []string
 	script     Script
 	mainLoop   func()
+	pidPath    string
 }
 
 const (
@@ -41,6 +43,10 @@ func New(mainLoop func()) Daemon {
 
 func (daemon *Daemon) AllowUser(userName string) {
 	daemon.allowUsers = append(daemon.allowUsers, userName)
+}
+
+func (daemon *Daemon) PIDFile(pidPath string) {
+	daemon.pidPath = pidPath
 }
 
 func (daemon *Daemon) StartWithCLI() (err error) {
@@ -148,6 +154,12 @@ func (daemon Daemon) Start() (err error) {
 		cmd := exec.Command(daemon.script.abs, progArgs...)
 		if err = cmd.Start(); err != nil {
 			return
+		}
+
+		if len(daemon.pidPath) > 0 {
+			var out []byte
+			out, _ = exec.Command("pgrep", "-f", daemon.script.abs).Output()
+			ioutil.WriteFile(daemon.pidPath, out, 0770)
 		}
 
 		return

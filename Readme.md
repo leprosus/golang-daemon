@@ -61,3 +61,4 @@ NB The script starts as daemon from beginning and will be stopped after 1 minute
 * daemon.Start - to daemonize script
 * daemon.Stop - to stop of daemonization
 * daemon.Status - shows script status
+* daemon.PIDFile() - sets file path to save PID
