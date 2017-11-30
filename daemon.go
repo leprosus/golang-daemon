@@ -174,7 +174,7 @@ func (daemon Daemon) Stop() (err error) {
 	exec.Command("pkill", "-f", daemon.script.abs).Output()
 
 	if len(daemon.pidPath) > 0 {
-		ioutil.WriteFile(daemon.pidPath, []byte{}, 0770)
+		os.Remove(daemon.pidPath)
 	}
 
 	return
