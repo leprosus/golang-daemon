@@ -159,7 +159,7 @@ func (daemon Daemon) Start() (err error) {
 		if len(daemon.pidPath) > 0 {
 			var out []byte
 			out, _ = exec.Command("pgrep", "-f", daemon.script.abs).Output()
-			ioutil.WriteFile(daemon.pidPath, out, 0770)
+			ioutil.WriteFile(daemon.pidPath, out, 0440)
 		}
 
 		return
