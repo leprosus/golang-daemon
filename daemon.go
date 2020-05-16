@@ -1,209 +1,78 @@
-package golang_daemon
+package daemon
 
 import (
-	"path/filepath"
+	"fmt"
+	"io/ioutil"
 	"os"
 	"os/exec"
-	"syscall"
+	"path/filepath"
+	"sort"
+	"strconv"
 	"strings"
-	"time"
-	"io/ioutil"
 )
 
-type Script struct {
-	abs  string
-	name string
-}
+var cli, pid string
 
-type Daemon struct {
-	withCli    bool
-	allowUsers []string
-	script     Script
-	mainLoop   func()
-	pidPath    string
-}
-
-const (
-	help = "Usage:\n" +
-		"\trun\tto run script in foreground mode\n" +
-		"\tstart\tto start as daemon\n" +
-		"\tstop\tto stop daemon\n" +
-		"\trestart\tto restart of the daemon\n" +
-		"\tstatus\treturns daemon status\n" +
-		"\thelp\tto print this help\n"
-
-	havntAccess = "You havn't access to execute"
-)
-
-func New(mainLoop func()) Daemon {
-	return Daemon{
-		mainLoop: mainLoop,
-		script:   Script{}}
-}
-
-func (daemon *Daemon) AllowUser(userName string) {
-	daemon.allowUsers = append(daemon.allowUsers, userName)
-}
-
-func (daemon *Daemon) PIDFile(pidPath string) {
-	daemon.pidPath = pidPath
-}
-
-func (daemon *Daemon) StartWithCLI() (err error) {
-	if !daemon.IsAllowExec() {
-		println(havntAccess)
-
-		return
-	}
-
-	if len(os.Args) > 1 {
-		err = daemon.splitScriptName()
-		if err != nil {
-			return
-		}
-
-		if os.Args[1] == "status" {
-			if daemon.IsDaemonised() {
-				println(daemon.script.name, "is running")
-			} else {
-				println(daemon.script.name, "is stopped")
-			}
-
-			return
-		}
-
-		daemon.withCli = true
-
-		switch os.Args[1] {
-		case "run":
-			daemon.mainLoop()
-		case "start":
-			err = daemon.doStart()
-			if err == nil {
-				println(daemon.script.name, "is running")
-			}
-		case "restart":
-			err = daemon.doStop()
-			if err == nil {
-				println(daemon.script.name, "is stopped")
-			}
-
-			for daemon.IsDaemonised() {
-				time.Sleep(time.Second)
-			}
-
-			err = daemon.doStart()
-			if err == nil {
-				println(daemon.script.name, "is running")
-			}
-		case "stop":
-			err = daemon.doStop()
-			if err == nil {
-				println(daemon.script.name, "is stopped")
-			}
-		default:
-			println(help)
-		}
-	} else {
-		daemon.mainLoop()
-	}
-
-	return
-}
-
-func (daemon *Daemon) splitScriptName() (err error) {
-	daemon.script.abs, err = filepath.Abs(os.Args[0])
+func Init(name string, params map[string]interface{}, pidPath string) (err error) {
+	cli, err = filepath.Abs(name)
 	if err != nil {
 		return
 	}
 
-	info, err := os.Stat(daemon.script.abs)
+	var lines []string
+	for key, val := range params {
+		lines = append(lines, fmt.Sprintf("--%s=%v", key, val))
+	}
+
+	sort.Strings(lines)
+
+	cli += " " + strings.Join(lines, " ")
+
+	pid, err = filepath.Abs(pidPath)
 	if err != nil {
 		return
 	}
 
-	daemon.script.name = info.Name()
-
-	return
-}
-
-func (daemon Daemon) doStart() (err error) {
-	if !daemon.IsDaemonised() {
-		err = daemon.Start()
-	}
-
-	return
-}
-
-func (daemon Daemon) doStop() (err error) {
-	if daemon.IsDaemonised() {
-		err = daemon.Stop()
-	}
-
-	return
-}
-
-func (daemon Daemon) Start() (err error) {
-	if !daemon.IsDaemonised() {
-		progArgs := os.Args[1:]
-		if daemon.withCli &&
-			(progArgs[0] == "start" || progArgs[0] == "restart") {
-			progArgs = os.Args[2:]
-		}
-
-		cmd := exec.Command(daemon.script.abs, progArgs...)
-		if err = cmd.Start(); err != nil {
-			return
-		}
-
-		if len(daemon.pidPath) > 0 {
-			var out []byte
-			out, _ = exec.Command("pgrep", "-f", daemon.script.abs).Output()
-			ioutil.WriteFile(daemon.pidPath, out, 0440)
-		}
-
+	err = os.MkdirAll(filepath.Dir(pid), 0755)
+	if err != nil {
 		return
 	}
 
-	_, err = syscall.Setsid()
-
 	return
 }
 
-func (daemon Daemon) Stop() (err error) {
-	exec.Command("pkill", "-f", daemon.script.abs).Output()
-
-	if len(daemon.pidPath) > 0 {
-		os.Remove(daemon.pidPath)
-	}
-
-	return
-}
-
-func (daemon Daemon) IsDaemonised() bool {
-	var out []byte
-	out, _ = exec.Command("pgrep", "-f", daemon.script.abs).Output()
+func IsRun() (ok bool) {
+	out, _ := exec.Command("sh", "-c", fmt.Sprintf("pgrep -f '%s'", cli)).Output()
 
 	return len(out) > 0
 }
 
-func (daemon Daemon) IsAllowExec() bool {
-	if len(daemon.allowUsers) == 0 {
-		return true
+func Start() (err error) {
+	if IsRun() {
+		return
 	}
 
-	bytes, err := exec.Command("whoami", ).Output()
+	cmd := exec.Command("sh", "-c", cli)
+	err = cmd.Start()
 	if err != nil {
-		return false
+		return
 	}
 
-	curUser := strings.TrimSpace(string(bytes))
+	err = ioutil.WriteFile(pid, []byte(strconv.Itoa(cmd.Process.Pid)), 0640)
 
-	for _, user := range daemon.allowUsers {
-		if curUser == user {
-			return true
-		}
-	}
+	return
+}
 
-	return false
+func Stop() (err error) {
+	_ = exec.Command("sh", "-c", fmt.Sprintf("pkill -f '%s'", cli)).Run()
+
+	err = RemovePIDFile()
+
+	return
+}
+
+func RemovePIDFile() (err error) {
+	err = os.Remove(pid)
+
+	return
 }
