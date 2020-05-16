@@ -1,17 +1,42 @@
-# Golang package to daemonize
+# Golang package to daemonize server application
 
-## Create new daemon with CLI
+## Create new daemon
 
 ```go
-daemon := golang_daemon.New()
-
-daemon.StartWithCLI(mainLoop)
+func main(){
+    err = daemon.Init(os.Args[0], map[string]interface{}{}, "./daemonized.pid")
+    if err != nil {
+        return
+    }
+    
+    switch os.Args[1] {
+    case "start":
+        err = daemon.Start()
+    case "stop":
+        err = daemon.Stop()
+    case "restart":
+        err = daemon.Stop()
+        err = daemon.Start()
+    case "status":
+        status := "stopped"
+        if daemon.IsRun() {
+            status = "started"
+        }
+    
+        fmt.Printf("Application is %s\n", status)
+    
+        return
+    case "":
+    default:
+        mainLoop()
+    }
+}
 
 func mainLoop(){
-        for {
-                log.Println("I'm daemon")
-                time.Sleep(time.Minute)
-        }
+    for {
+        log.Println("I'm daemon")
+        time.Sleep(time.Minute)
+    }
 }
 ```
 
@@ -25,28 +50,15 @@ To stop:
 
 `$ ./daemon.app stop`
 
+To restart:
+
+`$ ./daemon.app restart`
+
 To show status:
 
 `$ ./daemon.app status`
 
 ## Create new daemon with full code control
-
-```go
-daemon := golang_daemon.New()
-
-daemon.Start(mainLoop)
-
-time.AfterFunc(time.Minute, func() {
-        daemon.Stop()
-})
-
-func mainLoop(){
-        for {
-                log.Println("I'm daemon")
-                time.Sleep(time.Minute)
-        }
-}
-```
 
 In the case to start to need just compile code and run as usual:
 `$ go build -o daemon.app`
@@ -56,9 +68,8 @@ NB The script starts as daemon from beginning and will be stopped after 1 minute
 
 ## List all methods
 
-* golang_daemon.New() - initializes daemon
-* daemon.StartWithCLI - to daemonize with simple CLI support
+* daemon.Init - initializes daemon
 * daemon.Start - to daemonize script
 * daemon.Stop - to stop of daemonization
-* daemon.Status - shows script status
-* daemon.PIDFile() - sets file path to save PID
+* daemon.IsRun - returns flag of the running
+* daemon.RemovePIDFile() - removes autocreated PID file
