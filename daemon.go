@@ -58,7 +58,7 @@ func Start() (err error) {
 		return
 	}
 
-	err = ioutil.WriteFile(pid, []byte(strconv.Itoa(cmd.Process.Pid)), 0640)
+	err = CreatePIDFile()
 
 	return
 }
@@ -67,6 +67,12 @@ func Stop() (err error) {
 	_ = exec.Command("sh", "-c", fmt.Sprintf("pkill -f '%s'", cli)).Run()
 
 	err = RemovePIDFile()
+
+	return
+}
+
+func CreatePIDFile() (err error) {
+	err = ioutil.WriteFile(pid, []byte(strconv.Itoa(os.Getpid())), 0640)
 
 	return
 }
