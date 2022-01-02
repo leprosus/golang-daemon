@@ -4,12 +4,21 @@
 
 ```go
 func main(){
-    err = daemon.Init(os.Args[0], map[string]interface{}{}, "./daemonized.pid")
+    if len(os.Args) < 2 {
+        return
+    }
+
+    err := daemon.Init(os.Args[0], map[string]interface{}{}, "./app.pid")
     if err != nil {
         return
     }
+
+    var cmd string
+    if len(os.Args) > 1 {
+        cmd = os.Args[1]
+    }
     
-    switch os.Args[1] {
+    switch cmd {
     case "start":
         err = daemon.Start()
     case "stop":
@@ -27,6 +36,7 @@ func main(){
     
         return
     case "":
+		fallthrough
     default:
         mainLoop()
     }
@@ -57,6 +67,8 @@ To restart:
 To show status:
 
 `$ ./daemon.app status`
+
+You may see the code in this [example](./example/deamon.go).
 
 ## Create new daemon with full code control
 

@@ -19,15 +19,6 @@ func Init(name string, params map[string]interface{}, pidPath string) (err error
 		return
 	}
 
-	var lines []string
-	for key, val := range params {
-		lines = append(lines, fmt.Sprintf("--%s=%v", key, val))
-	}
-
-	sort.Strings(lines)
-
-	cli += " " + strings.Join(lines, " ")
-
 	pid, err = filepath.Abs(pidPath)
 	if err != nil {
 		return
@@ -37,6 +28,19 @@ func Init(name string, params map[string]interface{}, pidPath string) (err error
 	if err != nil {
 		return
 	}
+
+	if len(params) == 0 {
+		return
+	}
+
+	var lines []string
+	for key, val := range params {
+		lines = append(lines, fmt.Sprintf("--%s=%v", key, val))
+	}
+
+	sort.Strings(lines)
+
+	cli += " " + strings.Join(lines, " ")
 
 	return
 }
@@ -58,27 +62,19 @@ func Start() (err error) {
 		return
 	}
 
-	err = CreatePIDFile()
-
-	return
+	return CreatePIDFile()
 }
 
 func Stop() (err error) {
 	_ = exec.Command("sh", "-c", fmt.Sprintf("pkill -f '%s'", cli)).Run()
 
-	err = RemovePIDFile()
-
-	return
+	return RemovePIDFile()
 }
 
 func CreatePIDFile() (err error) {
-	err = ioutil.WriteFile(pid, []byte(strconv.Itoa(os.Getpid())), 0640)
-
-	return
+	return ioutil.WriteFile(pid, []byte(strconv.Itoa(os.Getpid())), 0640)
 }
 
 func RemovePIDFile() (err error) {
-	err = os.Remove(pid)
-
-	return
+	return os.Remove(pid)
 }
